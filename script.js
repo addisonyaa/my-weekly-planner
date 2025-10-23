@@ -1,50 +1,59 @@
-// 🔥 ВСТАВЬ СЮДА СВОЙ НАСТОЯЩИЙ КОД ИЗ FIREBASE!
-const firebaseConfig = {
-  apiKey: "AIzaSyCRCwQiqAGupjwv8yeBwXXGu4wsDmsVgUA",
-  authDomain: "my-weekly-planner-e81a2.firebaseapp.com", 
-  projectId: "my-weekly-planner-e81a2",
-  storageBucket: "my-weekly-planner-e81a2.firebasestorage.app",
-  messagingSenderId: "165501344909",
-  appId: "1:165501344909:web:68bcdca4b453b191f456c4"
-};
-
-// Инициализация Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
 class WeeklyPlanner {
     constructor() {
         this.currentWeek = new Date();
         this.currentDay = null;
-        this.userId = 'main_user';
-        this.data = { days: {}, notes: '' }; // ⚠️ ВАЖНО: инициализируем здесь!
+        this.SHEET_ID = 'https://docs.google.com/spreadsheets/d/1hFcTHPCvorWHsisjulVzptqoIt4B1CYjuLrmKJ0Sb5A/edit?usp=sharing'; // ⚠️ ЗАМЕНИ НА СВОЙ!
         this.init();
     }
 
     async init() {
-        console.log('🚀 Инициализация планера...');
         await this.loadData();
         this.renderWeek();
         this.setupEventListeners();
-        this.startRealTimeSync();
+        this.startAutoSync();
     }
 
-    // 🔄 СИНХРОНИЗАЦИЯ В РЕАЛЬНОМ ВРЕМЕНИ
-    startRealTimeSync() {
-        console.log('🔄 Запуск синхронизации...');
-        db.collection('planners').doc(this.userId)
-            .onSnapshot((doc) => {
-                console.log('📡 Получены новые данные из облака:', doc.data());
-                if (doc.exists && doc.data()) {
-                    this.data = { ...this.data, ...doc.data() };
-                    // ⚠️ ВАЖНО: Гарантируем что days существует
-                    if (!this.data.days) this.data.days = {};
-                    this.renderWeek();
-                    document.getElementById('notes').value = this.data.notes || '';
-                }
-            }, (error) => {
-                console.error('❌ Ошибка синхронизации:', error);
-            });
+    // 🔄 СИНХРОНИЗАЦИЯ КАЖДЫЕ 5 СЕКУНД
+    startAutoSync() {
+        setInterval(async () => {
+            await this.loadData();
+            this.renderWeek();
+        }, 5000);
+    }
+
+    // 📡 ЗАГРУЗКА ДАННЫХ ИЗ GOOGLE SHEETS
+    async loadData() {
+        try {
+            const response = await fetch(`https://docs.google.com/spreadsheets/d/${this.SHEET_ID}/gviz/tq?tqx=out:json`);
+            const text = await response.text();
+            const json = JSON.parse(text.substring(47).slice(0, -2));
+            
+            if (json.table.rows.length > 0) {
+                const data = JSON.parse(json.table.rows[0].c[0].v);
+                this.data = data;
+            } else {
+                this.data = { days: {}, notes: '' };
+            }
+            document.getElementById('notes').value = this.data.notes || '';
+        } catch (error) {
+            console.log('Создаем новые данные...');
+            this.data = { days: {}, notes: '' };
+        }
+    }
+
+    // 💾 СОХРАНЕНИЕ В GOOGLE SHEETS
+    async saveData() {
+        try {
+            const dataString = JSON.stringify(this.data);
+            const url = `https://docs.google.com/spreadsheets/d/${this.SHEET_ID}/edit?usp=sharing`;
+            
+            // Просто открываем ссылку для ручного сохранения (самый простой способ)
+            console.log('Данные для сохранения:', this.data);
+            alert('💾 Данные готовы к сохранению! Открой Google Таблицу и вставь: ' + dataString);
+            
+        } catch (error) {
+            console.error('Ошибка сохранения:', error);
+        }
     }
 
     getWeekDates(date) {
@@ -74,7 +83,6 @@ class WeeklyPlanner {
     }
 
     renderWeek() {
-        console.log('🎨 Отрисовка недели...', this.data);
         const weekDates = this.getWeekDates(this.currentWeek);
         const daysContainer = document.querySelector('.days-container');
         const currentWeekElement = document.getElementById('currentWeek');
@@ -97,10 +105,7 @@ class WeeklyPlanner {
         dayCard.dataset.date = date.toDateString();
         
         const dayId = date.toDateString();
-        
-        // ⚠️ ВАЖНО: Гарантируем что структура данных правильная
-        const daysData = this.data.days || {};
-        const dayData = daysData[dayId] || { tasks: [] };
+        const dayData = this.data.days[dayId] || { tasks: [] };
         
         dayCard.innerHTML = `
             <div class="day-header">
@@ -175,8 +180,6 @@ class WeeklyPlanner {
     async saveTask() {
         const taskText = document.getElementById('taskInput').value.trim();
         if (taskText) {
-            // ⚠️ ВАЖНО: Гарантируем структуру данных
-            if (!this.data.days) this.data.days = {};
             if (!this.data.days[this.currentDay]) {
                 this.data.days[this.currentDay] = { tasks: [] };
             }
@@ -193,7 +196,7 @@ class WeeklyPlanner {
     }
 
     async toggleTask(day, index) {
-        if (this.data.days && this.data.days[day] && this.data.days[day].tasks[index]) {
+        if (this.data.days[day] && this.data.days[day].tasks[index]) {
             this.data.days[day].tasks[index].completed = 
                 !this.data.days[day].tasks[index].completed;
             await this.saveData();
@@ -202,7 +205,7 @@ class WeeklyPlanner {
     }
 
     async deleteTask(day, index) {
-        if (this.data.days && this.data.days[day] && this.data.days[day].tasks[index]) {
+        if (this.data.days[day] && this.data.days[day].tasks[index]) {
             this.data.days[day].tasks.splice(index, 1);
             await this.saveData();
             this.renderWeek();
@@ -222,36 +225,6 @@ class WeeklyPlanner {
             btn.textContent = originalText;
             btn.style.background = '';
         }, 2000);
-    }
-
-    async loadData() {
-        try {
-            const doc = await db.collection('planners').doc(this.userId).get();
-            console.log('📥 Загрузка данных из Firebase:', doc.exists);
-            
-            if (doc.exists && doc.data()) {
-                this.data = { ...this.data, ...doc.data() };
-                // ⚠️ ВАЖНО: Гарантируем что days существует
-                if (!this.data.days) this.data.days = {};
-            } else {
-                // Создаем новый документ
-                this.data = { days: {}, notes: '' };
-                await this.saveData();
-            }
-            document.getElementById('notes').value = this.data.notes || '';
-        } catch (error) {
-            console.error('❌ Ошибка загрузки:', error);
-            this.data = { days: {}, notes: '' };
-        }
-    }
-
-    async saveData() {
-        try {
-            await db.collection('planners').doc(this.userId).set(this.data);
-            console.log('💾 Данные сохранены в Firebase:', this.data);
-        } catch (error) {
-            console.error('❌ Ошибка сохранения:', error);
-        }
     }
 }
 
