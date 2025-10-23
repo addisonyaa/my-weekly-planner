@@ -1,22 +1,50 @@
+// 🔥 ВСТАВЬ СЮДА СВОЙ НАСТОЯЩИЙ КОД ИЗ FIREBASE!
+const firebaseConfig = {
+  apiKey: "AIzaSyCRCwQiqAGupjwv8yeBwXXGu4wsDmsVgUA",
+  authDomain: "my-weekly-planner-e81a2.firebaseapp.com", 
+  projectId: "my-weekly-planner-e81a2",
+  storageBucket: "my-weekly-planner-e81a2.firebasestorage.app",
+  messagingSenderId: "165501344909",
+  appId: "1:165501344909:web:68bcdca4b453b191f456c4"
+};
+
+// Инициализация Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
 class WeeklyPlanner {
     constructor() {
         this.currentWeek = new Date();
         this.currentDay = null;
+        this.userId = 'main_user'; // Фиксированный ID для всех
+        this.data = { days: {}, notes: '' }; // Инициализация по умолчанию
         this.init();
     }
 
-    init() {
-        this.loadData();
+    async init() {
+        await this.loadData();
         this.renderWeek();
         this.setupEventListeners();
-        this.startAutoSave();
+        this.startRealTimeSync();
     }
 
-    // 🔄 АВТОСОХРАНЕНИЕ
-    startAutoSave() {
-        setInterval(() => {
-            this.saveData();
-        }, 3000);
+    // 🔄 СИНХРОНИЗАЦИЯ В РЕАЛЬНОМ ВРЕМЕНИ
+    startRealTimeSync() {
+        db.collection('planners').doc(this.userId)
+            .onSnapshot((doc) => {
+                console.log('Данные обновлены из облака!');
+                if (doc.exists) {
+                    this.data = doc.data();
+                    this.renderWeek();
+                    document.getElementById('notes').value = this.data.notes || '';
+                } else {
+                    // Если документа нет - создаем пустой
+                    this.data = { days: {}, notes: '' };
+                    this.saveData();
+                }
+            }, (error) => {
+                console.error('Ошибка синхронизации:', error);
+            });
     }
 
     getWeekDates(date) {
@@ -68,7 +96,10 @@ class WeeklyPlanner {
         dayCard.dataset.date = date.toDateString();
         
         const dayId = date.toDateString();
-        const dayData = this.data.days[dayId] || { tasks: [] };
+        
+        // 🔧 ИСПРАВЛЕНИЕ: Проверяем что days существует
+        const daysData = this.data.days || {};
+        const dayData = daysData[dayId] || { tasks: [] };
         
         dayCard.innerHTML = `
             <div class="day-header">
@@ -140,9 +171,11 @@ class WeeklyPlanner {
         document.getElementById('taskModal').style.display = 'none';
     }
 
-    saveTask() {
+    async saveTask() {
         const taskText = document.getElementById('taskInput').value.trim();
         if (taskText) {
+            // 🔧 ИСПРАВЛЕНИЕ: Гарантируем что days существует
+            if (!this.data.days) this.data.days = {};
             if (!this.data.days[this.currentDay]) {
                 this.data.days[this.currentDay] = { tasks: [] };
             }
@@ -152,36 +185,36 @@ class WeeklyPlanner {
                 completed: false
             });
             
-            this.saveData();
+            await this.saveData();
             this.renderWeek();
             this.hideTaskModal();
         }
     }
 
-    toggleTask(day, index) {
-        if (this.data.days[day] && this.data.days[day].tasks[index]) {
+    async toggleTask(day, index) {
+        if (this.data.days && this.data.days[day] && this.data.days[day].tasks[index]) {
             this.data.days[day].tasks[index].completed = 
                 !this.data.days[day].tasks[index].completed;
-            this.saveData();
+            await this.saveData();
             this.renderWeek();
         }
     }
 
-    deleteTask(day, index) {
-        if (this.data.days[day] && this.data.days[day].tasks[index]) {
+    async deleteTask(day, index) {
+        if (this.data.days && this.data.days[day] && this.data.days[day].tasks[index]) {
             this.data.days[day].tasks.splice(index, 1);
-            this.saveData();
+            await this.saveData();
             this.renderWeek();
         }
     }
 
-    saveNotes() {
+    async saveNotes() {
         this.data.notes = document.getElementById('notes').value;
-        this.saveData();
+        await this.saveData();
         
         const btn = document.getElementById('saveNotes');
         const originalText = btn.textContent;
-        btn.textContent = '✓ Сохранено!';
+        btn.textContent = '✓ В облаке!';
         btn.style.background = '#8aa89f';
         
         setTimeout(() => {
@@ -190,14 +223,31 @@ class WeeklyPlanner {
         }, 2000);
     }
 
-    loadData() {
-        const saved = localStorage.getItem('weeklyPlanner');
-        this.data = saved ? JSON.parse(saved) : { days: {}, notes: '' };
-        document.getElementById('notes').value = this.data.notes || '';
+    async loadData() {
+        try {
+            const doc = await db.collection('planners').doc(this.userId).get();
+            if (doc.exists) {
+                this.data = doc.data();
+                console.log('Данные загружены:', this.data);
+            } else {
+                // Создаем новый документ если не существует
+                this.data = { days: {}, notes: '' };
+                await this.saveData();
+            }
+            document.getElementById('notes').value = this.data.notes || '';
+        } catch (error) {
+            console.error('Ошибка загрузки:', error);
+            this.data = { days: {}, notes: '' };
+        }
     }
 
-    saveData() {
-        localStorage.setItem('weeklyPlanner', JSON.stringify(this.data));
+    async saveData() {
+        try {
+            await db.collection('planners').doc(this.userId).set(this.data);
+            console.log('Данные сохранены в облако!');
+        } catch (error) {
+            console.error('Ошибка сохранения:', error);
+        }
     }
 }
 
