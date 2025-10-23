@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мой недельный планер</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌿 МОЙ ПЛАН НА НЕДЕЛЮ</h1>
+            <div class="week-controls">
+                <button id="prevWeek">← Пред. неделя</button>
+                <span id="currentWeek"></span>
+                <button id="nextWeek">След. неделя →</button>
+            </div>
+        </header>
+
+        <main class="planner">
+            <div class="days-container">
+                <!-- Дни будут генерироваться через JavaScript -->
+            </div>
+
+            <section class="notes-section">
+                <h2>📝 ЗАМЕТКИ</h2>
+                <textarea id="notes" placeholder="Здесь можно писать свои мысли, идеи и важные заметки..."></textarea>
+                <button id="saveNotes">Сохранить заметки</button>
+            </section>
+        </main>
+
+        <div class="task-modal" id="taskModal">
+            <div class="modal-content">
+                <h3>Добавить задачу</h3>
+                <input type="text" id="taskInput" placeholder="Введите задачу...">
+                <div class="modal-buttons">
+                    <button id="saveTask">Сохранить</button>
+                    <button id="cancelTask">Отмена</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
