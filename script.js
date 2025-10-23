@@ -16,12 +16,13 @@ class WeeklyPlanner {
     constructor() {
         this.currentWeek = new Date();
         this.currentDay = null;
-        this.userId = 'main_user'; // Фиксированный ID для всех
-        this.data = { days: {}, notes: '' }; // Инициализация по умолчанию
+        this.userId = 'main_user';
+        this.data = { days: {}, notes: '' }; // ⚠️ ВАЖНО: инициализируем здесь!
         this.init();
     }
 
     async init() {
+        console.log('🚀 Инициализация планера...');
         await this.loadData();
         this.renderWeek();
         this.setupEventListeners();
@@ -30,20 +31,19 @@ class WeeklyPlanner {
 
     // 🔄 СИНХРОНИЗАЦИЯ В РЕАЛЬНОМ ВРЕМЕНИ
     startRealTimeSync() {
+        console.log('🔄 Запуск синхронизации...');
         db.collection('planners').doc(this.userId)
             .onSnapshot((doc) => {
-                console.log('Данные обновлены из облака!');
-                if (doc.exists) {
-                    this.data = doc.data();
+                console.log('📡 Получены новые данные из облака:', doc.data());
+                if (doc.exists && doc.data()) {
+                    this.data = { ...this.data, ...doc.data() };
+                    // ⚠️ ВАЖНО: Гарантируем что days существует
+                    if (!this.data.days) this.data.days = {};
                     this.renderWeek();
                     document.getElementById('notes').value = this.data.notes || '';
-                } else {
-                    // Если документа нет - создаем пустой
-                    this.data = { days: {}, notes: '' };
-                    this.saveData();
                 }
             }, (error) => {
-                console.error('Ошибка синхронизации:', error);
+                console.error('❌ Ошибка синхронизации:', error);
             });
     }
 
@@ -74,6 +74,7 @@ class WeeklyPlanner {
     }
 
     renderWeek() {
+        console.log('🎨 Отрисовка недели...', this.data);
         const weekDates = this.getWeekDates(this.currentWeek);
         const daysContainer = document.querySelector('.days-container');
         const currentWeekElement = document.getElementById('currentWeek');
@@ -97,7 +98,7 @@ class WeeklyPlanner {
         
         const dayId = date.toDateString();
         
-        // 🔧 ИСПРАВЛЕНИЕ: Проверяем что days существует
+        // ⚠️ ВАЖНО: Гарантируем что структура данных правильная
         const daysData = this.data.days || {};
         const dayData = daysData[dayId] || { tasks: [] };
         
@@ -174,7 +175,7 @@ class WeeklyPlanner {
     async saveTask() {
         const taskText = document.getElementById('taskInput').value.trim();
         if (taskText) {
-            // 🔧 ИСПРАВЛЕНИЕ: Гарантируем что days существует
+            // ⚠️ ВАЖНО: Гарантируем структуру данных
             if (!this.data.days) this.data.days = {};
             if (!this.data.days[this.currentDay]) {
                 this.data.days[this.currentDay] = { tasks: [] };
@@ -226,17 +227,20 @@ class WeeklyPlanner {
     async loadData() {
         try {
             const doc = await db.collection('planners').doc(this.userId).get();
-            if (doc.exists) {
-                this.data = doc.data();
-                console.log('Данные загружены:', this.data);
+            console.log('📥 Загрузка данных из Firebase:', doc.exists);
+            
+            if (doc.exists && doc.data()) {
+                this.data = { ...this.data, ...doc.data() };
+                // ⚠️ ВАЖНО: Гарантируем что days существует
+                if (!this.data.days) this.data.days = {};
             } else {
-                // Создаем новый документ если не существует
+                // Создаем новый документ
                 this.data = { days: {}, notes: '' };
                 await this.saveData();
             }
             document.getElementById('notes').value = this.data.notes || '';
         } catch (error) {
-            console.error('Ошибка загрузки:', error);
+            console.error('❌ Ошибка загрузки:', error);
             this.data = { days: {}, notes: '' };
         }
     }
@@ -244,9 +248,9 @@ class WeeklyPlanner {
     async saveData() {
         try {
             await db.collection('planners').doc(this.userId).set(this.data);
-            console.log('Данные сохранены в облако!');
+            console.log('💾 Данные сохранены в Firebase:', this.data);
         } catch (error) {
-            console.error('Ошибка сохранения:', error);
+            console.error('❌ Ошибка сохранения:', error);
         }
     }
 }
