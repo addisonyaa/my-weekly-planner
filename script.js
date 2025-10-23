@@ -2,7 +2,7 @@ class WeeklyPlanner {
     constructor() {
         this.currentWeek = new Date();
         this.currentDay = null;
-        this.SHEET_ID = 'https://docs.google.com/spreadsheets/d/1hFcTHPCvorWHsisjulVzptqoIt4B1CYjuLrmKJ0Sb5A/edit?usp=sharing'; // ⚠️ ЗАМЕНИ НА СВОЙ!
+        this.SHEET_ID = '1hFcTHPCvorWHsisjulVzptqoIt4B1CYjuLrmKJ0Sb5AЫ';
         this.init();
     }
 
@@ -231,3 +231,4 @@ class WeeklyPlanner {
 document.addEventListener('DOMContentLoaded', () => {
     new WeeklyPlanner();
 });
+
