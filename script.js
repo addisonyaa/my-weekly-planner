@@ -9,6 +9,14 @@ class WeeklyPlanner {
         this.loadData();
         this.renderWeek();
         this.setupEventListeners();
+        this.startAutoSave();
+    }
+
+    // 🔄 АВТОСОХРАНЕНИЕ
+    startAutoSave() {
+        setInterval(() => {
+            this.saveData();
+        }, 3000); // Сохраняем каждые 3 секунды
     }
 
     getWeekDates(date) {
@@ -84,7 +92,6 @@ class WeeklyPlanner {
     }
 
     setupEventListeners() {
-        // Навигация по неделям
         document.getElementById('prevWeek').addEventListener('click', () => {
             this.currentWeek.setDate(this.currentWeek.getDate() - 7);
             this.renderWeek();
@@ -95,7 +102,6 @@ class WeeklyPlanner {
             this.renderWeek();
         });
 
-        // Модальное окно для задач
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('add-task-btn')) {
                 this.currentDay = e.target.dataset.day;
@@ -111,17 +117,14 @@ class WeeklyPlanner {
             }
         });
 
-        // Управление модальным окном
         document.getElementById('saveTask').addEventListener('click', () => this.saveTask());
         document.getElementById('cancelTask').addEventListener('click', () => this.hideTaskModal());
         document.getElementById('taskInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.saveTask();
         });
 
-        // Заметки
         document.getElementById('saveNotes').addEventListener('click', () => this.saveNotes());
         
-        // Закрытие модального окна по клику вне его
         document.getElementById('taskModal').addEventListener('click', (e) => {
             if (e.target.id === 'taskModal') this.hideTaskModal();
         });
@@ -176,7 +179,6 @@ class WeeklyPlanner {
         this.data.notes = document.getElementById('notes').value;
         this.saveData();
         
-        // Показать уведомление о сохранении
         const btn = document.getElementById('saveNotes');
         const originalText = btn.textContent;
         btn.textContent = '✓ Сохранено!';
@@ -199,7 +201,6 @@ class WeeklyPlanner {
     }
 }
 
-// Инициализация приложения
 document.addEventListener('DOMContentLoaded', () => {
     new WeeklyPlanner();
 });
