@@ -1,8 +1,13 @@
+// 🔥 Supabase конфигурация
+const SUPABASE_URL = 'https://sjmccwfxlpnkigaostkg.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqbWNjd2Z4bHBua2lnYW9zdGtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1ODI1ODcsImV4cCI6MjA3NzE1ODU4N30.Y9eFZVU2AcLpT2cnb07eAlkVzFG5UTCUp48wXmv1x9E';
+
 class WeeklyPlanner {
     constructor() {
         this.currentWeek = new Date();
         this.currentDay = null;
-        this.SHEET_ID = '1hFcTHPCvorWHsisjulVzptqoIt4B1CYjuLrmKJ0Sb5AЫ';
+        this.userId = 'main_user';
+        this.data = { days: {}, notes: '' };
         this.init();
     }
 
@@ -10,50 +15,141 @@ class WeeklyPlanner {
         await this.loadData();
         this.renderWeek();
         this.setupEventListeners();
-        this.startAutoSync();
+        this.startRealTimeSync();
     }
 
-    // 🔄 СИНХРОНИЗАЦИЯ КАЖДЫЕ 5 СЕКУНД
-    startAutoSync() {
+    // 🔄 СИНХРОНИЗАЦИЯ В РЕАЛЬНОМ ВРЕМЕНИ
+    async startRealTimeSync() {
+        // Создаем подключение к Supabase для реального времени
+        const eventSource = new EventSource(`${SUPABASE_URL}/rest/v1/planners?user_id=eq.${this.userId}&apikey=${SUPABASE_KEY}`);
+        
+        eventSource.onmessage = async (event) => {
+            console.log('🔄 Данные обновлены из облака!');
+            await this.loadData();
+            this.renderWeek();
+        };
+
+        // Также периодическая проверка каждые 5 секунд
         setInterval(async () => {
             await this.loadData();
             this.renderWeek();
         }, 5000);
     }
 
-    // 📡 ЗАГРУЗКА ДАННЫХ ИЗ GOOGLE SHEETS
+    // 📡 ЗАГРУЗКА ДАННЫХ ИЗ SUPABASE
     async loadData() {
         try {
-            const response = await fetch(`https://docs.google.com/spreadsheets/d/${this.SHEET_ID}/gviz/tq?tqx=out:json`);
-            const text = await response.text();
-            const json = JSON.parse(text.substring(47).slice(0, -2));
-            
-            if (json.table.rows.length > 0) {
-                const data = JSON.parse(json.table.rows[0].c[0].v);
-                this.data = data;
-            } else {
-                this.data = { days: {}, notes: '' };
+            const response = await fetch(
+                `${SUPABASE_URL}/rest/v1/planners?user_id=eq.${this.userId}&select=*`,
+                {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.length > 0 && data[0].data) {
+                    this.data = data[0].data;
+                }
             }
             document.getElementById('notes').value = this.data.notes || '';
         } catch (error) {
-            console.log('Создаем новые данные...');
-            this.data = { days: {}, notes: '' };
+            console.log('Используем локальные данные');
         }
     }
 
-    // 💾 СОХРАНЕНИЕ В GOOGLE SHEETS
+    // 💾 СОХРАНЕНИЕ ДАННЫХ В SUPABASE
     async saveData() {
         try {
-            const dataString = JSON.stringify(this.data);
-            const url = `https://docs.google.com/spreadsheets/d/${this.SHEET_ID}/edit?usp=sharing`;
+            // Сначала проверяем существует ли запись
+            const checkResponse = await fetch(
+                `${SUPABASE_URL}/rest/v1/planners?user_id=eq.${this.userId}`,
+                {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                }
+            );
+
+            const existingData = await checkResponse.json();
             
-            // Просто открываем ссылку для ручного сохранения (самый простой способ)
-            console.log('Данные для сохранения:', this.data);
-            alert('💾 Данные готовы к сохранению! Открой Google Таблицу и вставь: ' + dataString);
+            if (existingData.length > 0) {
+                // Обновляем существующую запись
+                await fetch(
+                    `${SUPABASE_URL}/rest/v1/planners?user_id=eq.${this.userId}`,
+                    {
+                        method: 'PATCH',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            data: this.data,
+                            updated_at: new Date().toISOString()
+                        })
+                    }
+                );
+            } else {
+                // Создаем новую запись
+                await fetch(
+                    `${SUPABASE_URL}/rest/v1/planners`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            user_id: this.userId,
+                            data: this.data,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        })
+                    }
+                );
+            }
             
+            this.showSyncStatus('✅ Сохранено в облако!');
         } catch (error) {
             console.error('Ошибка сохранения:', error);
+            this.showSyncStatus('❌ Ошибка синхронизации');
         }
+    }
+
+    showSyncStatus(message) {
+        let status = document.querySelector('.sync-status');
+        if (!status) {
+            status = document.createElement('div');
+            status.className = 'sync-status';
+            status.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                background: #a8c0b8;
+                color: white;
+                padding: 8px 15px;
+                border-radius: 20px;
+                font-size: 12px;
+                z-index: 1000;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            `;
+            document.body.appendChild(status);
+        }
+        
+        status.textContent = message;
+        status.style.display = 'block';
+        
+        setTimeout(() => {
+            status.style.display = 'none';
+        }, 3000);
     }
 
     getWeekDates(date) {
@@ -105,7 +201,7 @@ class WeeklyPlanner {
         dayCard.dataset.date = date.toDateString();
         
         const dayId = date.toDateString();
-        const dayData = this.data.days[dayId] || { tasks: [] };
+        const dayData = this.data.days && this.data.days[dayId] ? this.data.days[dayId] : { tasks: [] };
         
         dayCard.innerHTML = `
             <div class="day-header">
@@ -180,6 +276,7 @@ class WeeklyPlanner {
     async saveTask() {
         const taskText = document.getElementById('taskInput').value.trim();
         if (taskText) {
+            if (!this.data.days) this.data.days = {};
             if (!this.data.days[this.currentDay]) {
                 this.data.days[this.currentDay] = { tasks: [] };
             }
@@ -196,7 +293,7 @@ class WeeklyPlanner {
     }
 
     async toggleTask(day, index) {
-        if (this.data.days[day] && this.data.days[day].tasks[index]) {
+        if (this.data.days && this.data.days[day] && this.data.days[day].tasks[index]) {
             this.data.days[day].tasks[index].completed = 
                 !this.data.days[day].tasks[index].completed;
             await this.saveData();
@@ -205,7 +302,7 @@ class WeeklyPlanner {
     }
 
     async deleteTask(day, index) {
-        if (this.data.days[day] && this.data.days[day].tasks[index]) {
+        if (this.data.days && this.data.days[day] && this.data.days[day].tasks[index]) {
             this.data.days[day].tasks.splice(index, 1);
             await this.saveData();
             this.renderWeek();
@@ -231,4 +328,3 @@ class WeeklyPlanner {
 document.addEventListener('DOMContentLoaded', () => {
     new WeeklyPlanner();
 });
-
